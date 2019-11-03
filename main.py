@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+
 import sys
 import time
 import math
@@ -6,6 +7,7 @@ import numpy as np
 import scipy
 import pygame as pg
 from pygame.locals import *
+
 
 
 class Player:
@@ -46,6 +48,7 @@ class Bullets:
     x = np.empty(shape=(0, 2), dtype=np.float32)
     v = np.empty(shape=(0, 2), dtype=np.float32)
     a = np.empty(shape=(0, 2), dtype=np.float32)
+    m = np.empty(shape=(0, 1), dtype=np.float32)
 
     def add(self, x, v=[0.0, 0.0], a=[0.0, 0.0]):
         '''Add a bullet and return its index.'''
@@ -135,9 +138,10 @@ if __name__ == '__main__':
     green = (0, 255, 0) 
     blue = (0, 0, 128)
     width, height = 900, 900
+
     # create the display surface object 
     # of specific dimension..e(X, Y). 
-    display_surface = pg.display.set_mode((width, height )) 
+    display_surface = pg.display.set_mode((width, height)) 
   
     # set the pygame window name 
     pg.display.set_caption('Show Text') 
@@ -180,7 +184,9 @@ if __name__ == '__main__':
                 angle=math.pi,
                 r=10,
             )
-    enn = [f]         #list of enemies
+
+    # List of enemies
+    enn = [f]
     frame = 0
     while True:
         g.step() # Compute dt
@@ -189,18 +195,20 @@ if __name__ == '__main__':
 
         i=0
         for en in enn:
-            #print(i)
             i += 1
             en.update(g.dt)
+
         # Event loop
         for e in pg.event.get():
-            if e.type == QUIT:      sys.exit()
+            if e.type == QUIT: sys.exit()
 
             if e.type == KEYDOWN:
                 if e.key == K_SPACE:
                     b.add(
-                        x=p.x + [(5+p.r)*math.cos(p.angle)/width,
-                                 (5+p.r)*math.sin(p.angle)/height],
+                        x=(p.x + [
+                            1.5 * p.r * math.cos(p.angle)/width,
+                            1.5 * p.r * math.sin(p.angle)/height,
+                        ]),
                         v=(p.v + [
                             .2 * math.cos(p.angle),
                             .2 * math.sin(p.angle),
@@ -258,16 +266,19 @@ if __name__ == '__main__':
                         ]),
                         a=[0, 0]
                     )
-        #print(b.x)
+
         for en in enn:
-            if en.x[1] < 0 or en.x[0] < 0 or en.x[1] > 1 or en.x[0] > 1:
+            if en.x[1] < 0 or en.x[0] < 0\
+                    or en.x[1] > 1 or en.x[0] > 1:
                 enn.remove(en)
                 
 
-        test_play = abs(b.x - p.x)*g.bg.get_size() < p.r   #check if there is a collision between player and any particle in x or y
-        collis_play = np.array([x.all() for x in test_play])    #there is a collision if happens in x or y
-        #print(collis, np.where(collis)[0])
-        b_rem = np.where(collis_play)[0]
+        # Check if there is a collision between player
+        # and any particle in x or y
+        test = abs(b.x - p.x)*g.bg.get_size() < p.r
+        collis = np.array([x.all() for x in test])
+
+        b_rem = np.where(collis)[0]
         if len(b_rem) > 0:
             b.rem(b_rem)
             p.hp -= 1
@@ -276,12 +287,14 @@ if __name__ == '__main__':
             display_surface.blit(text, textRect)
          
             
-        #check if enemies get hit
+        # Check if enemies get hit
         for en in enn:
-            test_enn = abs(b.x - en.x)*g.bg.get_size() < en.r   #check if there is a collision between player and any particle in x or y
-            collis_enn = np.array([x.all() for x in test_enn])    #there is a collision if happens in x or y
-            #print(collis, np.where(collis)[0])
+            # Check if there is a collision between player and
+            # any particle in x or y
+            test_enn = abs(b.x - en.x)*g.bg.get_size() < en.r
+            collis_enn = np.array([x.all() for x in test_enn])
             b_rem = np.where(collis_enn)[0] 
+
             if len(b_rem) > 0:
                 b.rem(b_rem)
                 en.hp -= 1
