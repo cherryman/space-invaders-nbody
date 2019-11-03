@@ -9,52 +9,100 @@ import pygame as pg
 from pygame.locals import *
 
 
+IMAGES = {
+    'player': './assets/player.png',
+    'enemy': './assets/enemy.png',
+    'bullet': './assets/bullet.png',
+}
 
-class Player:
-    def __init__(self, m, x, v, a, angle, r):
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 128)
+
+class Entity(pg.sprite.Sprite):
+    def __init__(self, sprite, size, m, x, v, a, angle):
+        pg.sprite.Sprite.__init__(self)
+
         self.m = m
         self.x = np.array([x[0],x[1]])
         self.v = np.array([v[0],v[1]])
         self.a = np.array([a[0],a[1]])
         self.angle = angle
-        self.r = r
         self.hp = 1
+        self.r = size/2
+
+        self.image = pg.image.load(IMAGES[sprite])
+        self.image = pg.transform.scale(self.image, (size, size))
+        self.rect = self.image.get_rect()
+
+    def draw(self, surf):
+        w, h = surf.get_size()
+
+        x = int(w * self.x[0])
+        y = int(h * (1 - self.x[1]))
+
+        img = pg.transform.rotate(
+            self.image,
+            math.degrees(self.angle) - 90.)
+        img_w, img_h = img.get_size()
+        surf.blit(img, (x - img_w/2, y - img_h/2))
 
     def update(self, dt: float):
         '''Update given a time in seconds'''
         self.v += dt * self.a
         self.x += dt * self.v
+        self.rect.x = self.x[0] - self.rect.w/2
+        self.rect.y = self.x[1] - self.rect.h/2
 
-    def draw(self, surf):
-        w, h = surf.get_size()
-        phi = self.angle
-        l = self.r + 5 # Length of cannon in pixels
 
-        # End of line position
-        lp = self.x + [l*math.cos(phi)/w, l*math.sin(phi)/h]
+class Enemy(Entity):
+    def __init__(self, size, m, x, v, a, angle):
+        super().__init__('enemy', size, m, x, v, a, angle)
 
-        # Pixel positions
-        x = int(w * self.x[0]) 
-        y = int(h * (1 - self.x[1]))
-        lx = int(w * lp[0]) 
-        ly = int(h * (1 - lp[1]))
 
-        # Draw the circle and the line
-        pg.draw.circle(surf, (255,255,255), (x,y), self.r)
-        pg.draw.line(surf, (255,255,255), (x,y), (lx,ly), 2)
+class Player(Entity):
+    def __init__(self, size, m, x, v, a, angle):
+        super().__init__('player', size, m, x, v, a, angle)
+
+    def update(self, dt: float):
+        if pg.key.get_pressed()[pg.K_UP]:
+            p.v = 0.2 * np.array([
+                math.cos(p.angle),
+                math.sin(p.angle),
+            ])
+        elif pg.key.get_pressed()[pg.K_DOWN]:
+            p.v = -0.2 * np.array([
+                math.cos(p.angle),
+                math.sin(p.angle),
+            ])
+        else:
+            p.v = np.zeros(2)
+
+        if pg.key.get_pressed()[pg.K_LEFT]:
+            self.angle += math.pi*dt
+        if pg.key.get_pressed()[pg.K_RIGHT]:
+            self.angle -= math.pi*dt
+
+        super().update(dt)
 
 
 class Bullets:
     x = np.empty(shape=(0, 2), dtype=np.float32)
     v = np.empty(shape=(0, 2), dtype=np.float32)
     a = np.empty(shape=(0, 2), dtype=np.float32)
-    m = np.empty(shape=(0, 1), dtype=np.float32)
 
-    def add(self, x, v=[0.0, 0.0], a=[0.0, 0.0]):
+    m = np.empty(shape=(0, 1), dtype=np.float32)
+    r = np.empty(shape=(0, 1), dtype=np.int32)
+
+    img = pg.image.load(IMAGES['bullet'])
+
+    def add(self, m, x, v=[0.0, 0.0], a=[0.0, 0.0]):
         '''Add a bullet and return its index.'''
         self.x = np.append(self.x, [x], axis=0)
         self.v = np.append(self.v, [v], axis=0)
         self.a = np.append(self.a, [a], axis=0)
+
+        self.m = np.append(self.m, m)
+        self.r = np.append(self.r, int(round(math.sqrt(m) * 10.)))
         return len(self.x) - 1
 
     def rem(self, index):
@@ -62,27 +110,34 @@ class Bullets:
         self.v = np.delete(self.v, index, axis=0)
         self.a = np.delete(self.a, index, axis=0)
 
+        self.m = np.delete(self.m, index, axis=0)
+        self.r = np.delete(self.r, index, axis=0)
+
     def update(self, dt):
         self.v += dt * self.a
         self.x += dt * self.v
 
-    def draw(self, bg):
-        for pos in self.x:
-            w, h = bg.get_size()
-            x = int(pos[0] * w)
-            y = int((1-pos[1]) * h)
-            pg.draw.circle(bg, (255,255,255), (x, y), 3)
+    def draw(self, surf):
+        w, h = surf.get_size()
+
+        for pos, rad in zip(self.x, self.r):
+            img = pg.transform.scale(self.img, (rad, rad))
+            img_w, img_h = img.get_size()
+
+            x = int(pos[0] * w + img_w/2)
+            y = int((1-pos[1]) * h + img_h/2)
+            surf.blit(img, (x, y))
 
 
 class Game:
     def __init__(self, dim):
         pg.init()
+        pg.display.set_caption('Space Invaders NBody')
 
         self.prev_t = time.time()
         self.curr_t = None
         self.dt = 0
 
-        # Intialize surface
         self.screen = pg.display.set_mode(dim)
         self.bg = pg.Surface(self.screen.get_size()).convert()
 
@@ -99,104 +154,44 @@ class Game:
         pg.display.flip()
 
 
-class Enemy:
-    def __init__(self, m, x, v, a, angle, r):
-        self.m = m
-        self.x = np.array([x[0],x[1]])
-        self.v = np.array([v[0],v[1]])
-        self.a = np.array([a[0],a[1]])
-        self.angle = angle
-        self.r = r
-        self.hp = 1
-        
-    def update(self, dt: float):
-        """Update given a time in seconds"""
-        self.v += dt * self.a
-        self.x += dt * self.v
-
-    def draw(self, surf):
-        w, h = surf.get_size()
-        phi = self.angle
-        l = self.r + 5 # Length of cannon in pixels
-
-        # End of line position
-        lp = self.x + [l*math.cos(phi)/w, l*math.sin(phi)/h]
-
-        # Pixel positions
-        x = int(w * self.x[0]) 
-        y = int(h * (1 - self.x[1]))
-        lx = int(w * lp[0]) 
-        ly = int(h * (1 - lp[1]))
-
-        # Draw the circle and the line
-        pg.draw.circle(surf, (125,125,125), (x,y), self.r)
-        pg.draw.line(surf, (125,125,125), (x,y), (lx,ly), 2)
-
-
 if __name__ == '__main__':
-    pg.init()
-    green = (0, 255, 0) 
-    blue = (0, 0, 128)
     width, height = 900, 900
-
-    # create the display surface object 
-    # of specific dimension..e(X, Y). 
-    display_surface = pg.display.set_mode((width, height)) 
-  
-    # set the pygame window name 
-    pg.display.set_caption('Show Text') 
-  
-    # create a font object. 
-    # 1st parameter is the font file 
-    # which is present in pygame. 
-    # 2nd parameter is size of the font 
-    font = pg.font.Font('freesansbold.ttf', 32) 
-  
-    # create a text suface object, 
-    # on which text is drawn on it. 
-    text = font.render('You died', True, green, blue) 
-  
-    # create a rectangular object for the 
-    # text surface object 
-    textRect = text.get_rect()  
-  
-    # set the center of the rectangular object. 
-    textRect.center = (width/2, height/2)
 
     g = Game(dim=(width, height))
     p = Player(
+        size=50,
         m=1.0,
         x=(0.5,0.5),
         v=(0.0,0.0),
         a=(0.0,0.0),
         angle=math.pi,
-        r=10,
     )
     b = Bullets()
-
-    key_down = {}
-    
     f = Enemy(
-                m=1.0,
-                x=(np.random.rand(),1),
-                v=(0.0,-0.1),
-                a=(0.0,0.0),
-                angle=math.pi,
-                r=10,
-            )
-
-    # List of enemies
+        size=50,
+        m=1.0,
+        x=(np.random.rand(),1),
+        v=(0.0,-0.1),
+        a=(0.0,0.0),
+        angle=math.pi,
+    )
     enn = [f]
+
+    # Create the display surface object
+    # of specific dimension..e(X, Y).
+    display_surface = pg.display.set_mode((width, height))
+
+    font = pg.font.Font('freesansbold.ttf', 32)
+    text = font.render('You died', True, GREEN, BLUE)
+    textRect = text.get_rect()
+    textRect.center = (width/2, height/2)
+
     frame = 0
     while True:
         g.step() # Compute dt
         p.update(g.dt)
         b.update(g.dt)
-
-        i=0
-        for en in enn:
-            i += 1
-            en.update(g.dt)
+        for en in enn: en.update(g.dt)
 
         # Event loop
         for e in pg.event.get():
@@ -205,9 +200,10 @@ if __name__ == '__main__':
             if e.type == KEYDOWN:
                 if e.key == K_SPACE:
                     b.add(
+                        m=1.0,
                         x=(p.x + [
-                            1.5 * p.r * math.cos(p.angle)/width,
-                            1.5 * p.r * math.sin(p.angle)/height,
+                            1.4 * p.r * math.cos(p.angle)/width,
+                            1.4 * p.r * math.sin(p.angle)/height,
                         ]),
                         v=(p.v + [
                             .2 * math.cos(p.angle),
@@ -216,41 +212,20 @@ if __name__ == '__main__':
                         a=[0, 0]
                     )
 
-                key_down[e.key] = True
-            elif e.type == KEYUP:
-                key_down[e.key] = False
-
-        if key_down.get(pg.K_UP):
-            p.v = 0.2 * np.array([
-                math.cos(p.angle),
-                math.sin(p.angle),
-            ])
-        elif key_down.get(pg.K_DOWN):
-            p.v = -0.2 * np.array([
-                math.cos(p.angle),
-                math.sin(p.angle),
-            ])
-        else:
-            p.v = np.zeros(2)
-
-        if key_down.get(pg.K_LEFT):  p.angle += math.pi*g.dt
-        if key_down.get(pg.K_RIGHT): p.angle -= math.pi*g.dt
-
         #Random chance of ennemy spawning
         spawn_chance = 0.01
         
         if np.random.rand() < spawn_chance:
             f = Enemy(
-                     m=1.0,
-                     x=(np.random.rand(),1),
-                     v=(0,-max(abs(-np.random.rand()/10),0.05)),
-                     a=(0.0,0.0),
-                     angle=math.pi,
-                     r=10,
-                 )
+                size=50,
+                m=1.0,
+                x=(np.random.rand(),1),
+                v=(0,-max(abs(-np.random.rand()/10),0.05)),
+                a=(0.0,0.0),
+                angle=math.pi,
+            )
             ang = math.atan2(p.x[1] - f.x[1], p.x[0] - f.x[0])
             f.angle = ang
-            print(f.x,p.x,ang)
             enn.append(f)
         
         if frame % 120 == 0:
@@ -258,14 +233,15 @@ if __name__ == '__main__':
                 ang = math.atan2(p.x[1] - en.x[1], p.x[0] - en.x[0])
                 en.angle = ang + np.random.rand()*2*math.pi/8
                 b.add(
-                        x=en.x+ [(5+en.r)*math.cos(en.angle)/width,
-                                 (5+en.r)*math.sin(en.angle)/height],
-                        v=(en.v + [
-                            .2 * math.cos(en.angle),
-                            .2 * math.sin(en.angle),
-                        ]),
-                        a=[0, 0]
-                    )
+                    m=1.0,
+                    x=en.x + [1.5*en.r*math.cos(en.angle)/width,
+                              1.5*en.r*math.sin(en.angle)/height],
+                    v=(en.v + [
+                        .2 * math.cos(en.angle),
+                        .2 * math.sin(en.angle),
+                    ]),
+                    a=[0, 0]
+                )
 
         for en in enn:
             if en.x[1] < 0 or en.x[0] < 0\
@@ -282,10 +258,9 @@ if __name__ == '__main__':
         if len(b_rem) > 0:
             b.rem(b_rem)
             p.hp -= 1
-            print(p.hp)
+
         if p.hp <= 0:
             display_surface.blit(text, textRect)
-         
             
         # Check if enemies get hit
         for en in enn:
@@ -305,8 +280,7 @@ if __name__ == '__main__':
         g.clear()
         p.draw(g.bg)
         b.draw(g.bg)
-        for en in enn:
-            en.draw(g.bg)
+        for en in enn: en.draw(g.bg)
         g.draw()
 
         frame += 1
