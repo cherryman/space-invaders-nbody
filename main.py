@@ -104,7 +104,8 @@ class Enemy:
         self.a = np.array([a[0],a[1]])
         self.angle = angle
         self.r = r
-
+        self.hp = 1
+        
     def update(self, dt: float):
         """Update given a time in seconds"""
         self.v += dt * self.a
@@ -133,10 +134,10 @@ if __name__ == '__main__':
     pg.init()
     green = (0, 255, 0) 
     blue = (0, 0, 128)
-
+    width, height = 900, 900
     # create the display surface object 
     # of specific dimension..e(X, Y). 
-    display_surface = pg.display.set_mode((900, 900 )) 
+    display_surface = pg.display.set_mode((width, height )) 
   
     # set the pygame window name 
     pg.display.set_caption('Show Text') 
@@ -156,9 +157,9 @@ if __name__ == '__main__':
     textRect = text.get_rect()  
   
     # set the center of the rectangular object. 
-    textRect.center = (450, 450)
+    textRect.center = (width/2, height/2)
 
-    g = Game(dim=(900, 900))
+    g = Game(dim=(width, height))
     p = Player(
         m=1.0,
         x=(0.5,0.5),
@@ -198,7 +199,8 @@ if __name__ == '__main__':
             if e.type == KEYDOWN:
                 if e.key == K_SPACE:
                     b.add(
-                        x=p.x,
+                        x=p.x + [(5+p.r)*math.cos(p.angle)/width,
+                                 (5+p.r)*math.sin(p.angle)/height],
                         v=(p.v + [
                             .2 * math.cos(p.angle),
                             .2 * math.sin(p.angle),
@@ -211,12 +213,12 @@ if __name__ == '__main__':
                 key_down[e.key] = False
 
         if key_down.get(pg.K_UP):
-            p.v = 0.3 * np.array([
+            p.v = 0.2 * np.array([
                 math.cos(p.angle),
                 math.sin(p.angle),
             ])
         elif key_down.get(pg.K_DOWN):
-            p.v = -0.3 * np.array([
+            p.v = -0.2 * np.array([
                 math.cos(p.angle),
                 math.sin(p.angle),
             ])
@@ -248,7 +250,8 @@ if __name__ == '__main__':
                 ang = math.atan2(p.x[1] - en.x[1], p.x[0] - en.x[0])
                 en.angle = ang + np.random.rand()*2*math.pi/8
                 b.add(
-                        x=en.x,
+                        x=en.x+ [(5+en.r)*math.cos(en.angle)/width,
+                                 (5+en.r)*math.sin(en.angle)/height],
                         v=(en.v + [
                             .2 * math.cos(en.angle),
                             .2 * math.sin(en.angle),
@@ -259,18 +262,32 @@ if __name__ == '__main__':
         for en in enn:
             if en.x[1] < 0 or en.x[0] < 0 or en.x[1] > 1 or en.x[0] > 1:
                 enn.remove(en)
+                
 
-        test = abs(b.x - p.x)*g.bg.get_size() < p.r   #check if there is a collision between player and any particle in x or y
-        collis = np.array([x.all() for x in test])        #there is a collision if happens in x or y
+        test_play = abs(b.x - p.x)*g.bg.get_size() < p.r   #check if there is a collision between player and any particle in x or y
+        collis_play = np.array([x.all() for x in test_play])    #there is a collision if happens in x or y
         #print(collis, np.where(collis)[0])
-        b_rem = np.where(collis)[0]
+        b_rem = np.where(collis_play)[0]
         if len(b_rem) > 0:
             b.rem(b_rem)
             p.hp -= 1
             print(p.hp)
         if p.hp <= 0:
             display_surface.blit(text, textRect)
+         
             
+        #check if enemies get hit
+        for en in enn:
+            test_enn = abs(b.x - en.x)*g.bg.get_size() < en.r   #check if there is a collision between player and any particle in x or y
+            collis_enn = np.array([x.all() for x in test_enn])    #there is a collision if happens in x or y
+            #print(collis, np.where(collis)[0])
+            b_rem = np.where(collis_enn)[0] 
+            if len(b_rem) > 0:
+                b.rem(b_rem)
+                en.hp -= 1
+            if en.hp <= 0:
+                enn.remove(en)
+                
         pg.display.update()
         g.clear()
         p.draw(g.bg)
