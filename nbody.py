@@ -1,12 +1,12 @@
 import numpy as np 
 from matplotlib import pyplot as plt
 
-G=0.5#gravitationnal constant
+G=0.006#gravitationnal constant
 nparticles=5
 pos = np.random.rand(nparticles,2)
 vel = (np.random.rand(nparticles,2)*2-1)*0
 m = np.random.rand(nparticles)
-    
+
 def calForceMesh(x,m):
     grid = 200
     density,bx,by= np.histogram2d(x[:,0],x[:,1],bins=grid,range=[[0, 2], [0, 2]],weights=m)
@@ -21,7 +21,7 @@ def calForceMesh(x,m):
     k2[0,0]=np.Inf
     fphi = -G*frho/k2
     #fphi = np.nan_to_num(fphi) #try other values? plt.
-    phi = np.real(np.fft.ifft2(fphi))
+    phi = np.real(np.fft.ifft2(fphi)) / (4*np.pi)
     #plt.clf()
     #plt.imshow(np.real(phi))
     #plt.figure(2)
@@ -47,43 +47,65 @@ def calForceMesh(x,m):
         #if digy>99:
         #    continue
         force = np.array([xgrad[digx,digy],ygrad[digy,digy]])
-        if force[0]>=1:
-            force[0]=1
-        if force[1]>=1:
-            force[1]=1
+        # if force[0]>=1:
+        #     force[0]=1
+        # if force[1]>=1:
+        #     force[1]=1
         forces[i]=force
     return forces
     
+def gravity(p1,p2,m1,m2):
+    # gravitational force of bul2 on bul1 
+    epsilon = 0.05
+    x1=p1[0];x2=p2[0];y1=p1[1];y2=p2[1]
+    num = G*m1*m2
+    den = ((x1-x2)**2+(y1-y2)**2+epsilon**2)**(3/2)
+    return np.array([-(num/den)*(x1-x2),-(num/den)*(y1-y2)])
+
+
+def calForce(x,m): #calculate force between 2 particles
+    nparticles = len(x)
+    forces=np.zeros((nparticles,2))
+    for i in range(nparticles):
+        for j in range(nparticles):
+            if (i!=j):
+                forces[i]=gravity(x[i],x[j],m[i],m[j]) #here just the gravity
+    return forces
+
     
+# calFn = calForce
+calFn = calForceMesh
 def takeStepRK4(dt,pos,v,m):
-    
+    if len(pos) == 0:
+        return pos, v
+
     '''Integration of d2y/dt2=f, here f is the acceleration'''
     x=pos[:,0];y=pos[:,1];vx=v[:,0];vy=v[:,1];
     pos1=np.empty((len(x),2))
     pos1[:,0]=x
     pos1[:,1]=y
-    f1=calForceMesh(pos1, m)/np.array([m,m]).transpose()
+    f1=calFn(pos1, m)/np.array([m,m]).transpose()
     #M2=buls
     x2=x+(dt/2)*vx
     y2=y+(dt/2)*vy
     pos2=np.empty((len(x),2))
     pos2[:,0]=x2
     pos2[:,1]=y2
-    f2=calForceMesh(pos2,m)/np.array([m,m]).transpose()
+    f2=calFn(pos2,m)/np.array([m,m]).transpose()
     #M3=buls
     x3=x+(dt/2)*vx+(dt*dt/4)*f1[:,0]
     y3=y+(dt/2)*vy+(dt*dt/4)*f1[:,1]
     pos3=np.empty((len(x),2))
     pos3[:,0]=x3
     pos3[:,1]=y3
-    f3=calForceMesh(pos3, m)/np.array([m,m]).transpose()
+    f3=calFn(pos3, m)/np.array([m,m]).transpose()
     #M4=buls
     x4=x+(dt)*vx+(dt*dt/2)*f2[:,0]
     y4=y+(dt)*vy+(dt*dt/2)*f2[:,1]
     pos4=np.empty((len(x),2))
     pos4[:,0]=x4
     pos4[:,1]=y4
-    f4=calForceMesh(pos4,m)/np.array([m,m]).transpose()
+    f4=calFn(pos4,m)/np.array([m,m]).transpose()
     #Mfinal=buls
     vxfinal=vx+(dt/6)*(f1+2*f2+2*f3+f4)[:,0]
     vyfinal=vy+(dt/6)*(f1+2*f2+2*f3+f4)[:,1]
@@ -97,37 +119,16 @@ def takeStepRK4(dt,pos,v,m):
     vfinal[:,1]=vyfinal
     return posfinal,vfinal
 
-def gravity(p1,p2,m1,m2):
-    # gravitational force of bul2 on bul1 
-    epsilon = 0.1
-    x1=p1[0];x2=p2[0];y1=p1[1];y2=p2[1]
-    num = G*m1*m2
-    den = ((x1-x2)**2+(y1-y2)**2+epsilon**2)**(3/2)
-    return np.array([-(num/den)*(x1-x2),-(num/den)*(y1-y2)])
 
-def calForce(x,m): #calculate force between 2 particles
-    nparticles = len(x)
-    forces=np.zeros((nparticles,2))
-    for i in range(nparticles):
-        for j in range(nparticles):
-            if (i!=j):
-                forces[i]=gravity(x[i],x[j],m[i],m[j]) #here just the gravity
-    return forces
-
-
-T=3
-t=0
-dt=0.001
-while (t<T): #Simulate from 0 to T
-    pos,vel = takeStepRK4(dt,pos,vel,m)
-    pos=pos
-    plt.clf()
-    plt.scatter(pos[:,0],pos[:,1])
-    plt.axis([0,1,0,1])
-    plt.pause(1e-4)
-    t += dt
-    
-    
-    
-
-    
+if __name__ == '__main__':
+    T=3
+    t=0
+    dt=0.001
+    while (t<T): #Simulate from 0 to T
+        pos,vel = takeStepRK4(dt,pos,vel,m)
+        pos=pos
+        plt.clf()
+        plt.scatter(pos[:,0],pos[:,1])
+        plt.axis([0,1,0,1])
+        plt.pause(1e-4)
+        t += dt

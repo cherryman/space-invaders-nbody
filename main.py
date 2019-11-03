@@ -20,6 +20,8 @@ IMAGES = {
     'enemy': './assets/enemy.png',
     'bullet': './assets/bullet.png',
     'bg': './assets/bg.jpg',
+    'heart': './assets/heart.png',
+    'clock': './assets/clock.png',
 }
 
 GREEN = (0, 255, 0)
@@ -27,7 +29,7 @@ BLUE = (0, 0, 128)
 
 
 class Entity(pg.sprite.Sprite):
-    def __init__(self, sprite, size, m, x, v, a, angle):
+    def __init__(self, sprite, size, hp, m, x, v, a, angle):
         pg.sprite.Sprite.__init__(self)
 
         self.m = m
@@ -35,7 +37,7 @@ class Entity(pg.sprite.Sprite):
         self.v = np.array([v[0],v[1]])
         self.a = np.array([a[0],a[1]])
         self.angle = angle
-        self.hp = 1
+        self.hp = hp
         self.r = size/2
 
         self.image = pg.image.load(IMAGES[sprite])
@@ -63,13 +65,13 @@ class Entity(pg.sprite.Sprite):
 
 
 class Enemy(Entity):
-    def __init__(self, size, m, x, v, a, angle):
-        super().__init__('enemy', size, m, x, v, a, angle)
+    def __init__(self, size, hp, m, x, v, a, angle):
+        super().__init__('enemy', size, hp, m, x, v, a, angle)
 
 
 class Player(Entity):
-    def __init__(self, size, m, x, v, a, angle):
-        super().__init__('player', size, m, x, v, a, angle)
+    def __init__(self, size, hp, m, x, v, a, angle):
+        super().__init__('player', size, hp, m, x, v, a, angle)
 
     def update(self, game):
         if pg.key.get_pressed()[pg.K_UP]:
@@ -140,20 +142,32 @@ class Bullets:
 
 class Game:
     def __init__(self, dim):
+        pw, ph = dim
         pg.init()
         pg.display.set_caption('Space Invaders NBody')
 
         self.w, self.h = 1., 1.
         self.pw, self.ph = dim
 
+        self.font = pg.font.Font('freesansbold.ttf', 36)
+
         self.prev_t = time.time()
         self.curr_t = None
         self.dt = 0
         self.stepCount = -1
 
+        self.img_clock = pg.image.load(IMAGES['clock'])
+        self.img_clock = pg.transform.scale(self.img_clock, (pw//10, pw//10))
+
+        self.img_heart = pg.image.load(IMAGES['heart'])
+        self.img_heart = pg.transform.scale(self.img_heart, (pw//10, pw//10))
+
         self.image = pg.image.load(IMAGES['bg'])
         self.screen = pg.display.set_mode(dim)
         self.bg = pg.Surface(self.screen.get_size()).convert()
+
+        self.time_started = time.time()
+        self.time_elapsed = 0
 
     def step(self):
         self.curr_t = time.time()
@@ -161,44 +175,22 @@ class Game:
         self.prev_t = self.curr_t
         self.stepCount += 1
 
+        # self.time_elapsed = time.time() - self.time_started
+
     def clear(self):
         self.bg.fill((0, 0, 0))
         self.bg.blit(self.image, (0, 0))
 
     def draw(self):
+        clk_size = self.img_clock.get_rect()
+
         self.screen.blit(self.bg, (0, 0))
+        # self.screen.blit(self.img_clock, (2, 2))
+        # self.screen.blit(self.img_heart, (2, 2 + clk_size.h))
         pg.display.flip()
 
 
-# def compute_step(dt, bull, ennemies, player):
-#     lens = [
-#         len(bull.x),
-#         len(bull.x) + len(ennemies),
-#     ]
-
-#     xs = bull.x[:]
-#     vs = bull.v[:]
-#     ms = bull.m[:]
-#     for e in ennemies:
-#         xs = np.append(xs, [e.x], axis=0)
-#         vs = np.append(vs, [e.v], axis=0)
-#         ms = np.append(ms, [e.m])
-
-#     xs = np.append(xs, [player.x], axis=0)
-#     vs = np.append(vs, [player.v], axis=0)
-#     ms = np.append(ms, [player.m])
-
-#     nx, nv = takeStepRK4(dt, xs, vs, ms)
-
-#     return ((nx[0:lens[0]], nv[0:lens[0]]),
-#             (nx[lens[0]:lens[1]], nv[lens[0]:lens[1]]),
-#             (nx[-1], nv[-1]))
-
-
-if __name__ == '__main__':
-    width, height = 1000, 1000
-
-    g = Game(dim=(width, height))
+def main(g):
     p = Player(
         size=50,
         m=1.0,
@@ -206,25 +198,24 @@ if __name__ == '__main__':
         v=(0.0,0.0),
         a=(0.0,0.0),
         angle=math.pi,
+        hp=6000,
     )
     b = Bullets()
     enn = []
-
-    font = pg.font.Font('freesansbold.ttf', 32)
-    text = font.render('You died', True, GREEN, BLUE)
-    textRect = text.get_rect()
-    textRect.center = (width/2, height/2)
 
     frame = 0
     while True:
         g.step() # Compute dt
 
         b.x, b.v = takeStepRK4(g.dt, b.x, b.v, b.m)
-        # (b.x, b.v), _, _ = compute_step(g.dt, b, enn, p)
 
         b.update(g)
         p.update(g)
         for en in enn: en.update(g)
+
+        if p.hp <= 0: return
+
+        if g.stepCount % 75 == 0: print('n particles: %s; FPS: ' % len(b.x), int(1/g.dt))
 
         # Event loop
         ks = 0
@@ -232,7 +223,7 @@ if __name__ == '__main__':
             if e.type == QUIT: sys.exit()
             if e.type == KEYDOWN: ks = g.stepCount
 
-        if (g.stepCount-ks) % 8 == 0 and pg.key.get_pressed()[pg.K_SPACE]:
+        if (g.stepCount-ks) % 4 == 0 and pg.key.get_pressed()[pg.K_SPACE]:
             b.add(
                 m=2.0,
                 x=(p.x + [
@@ -247,7 +238,7 @@ if __name__ == '__main__':
             )
 
         #Random chance of ennemy spawning
-        spawn_chance = 0.01
+        spawn_chance = 0.02
         
         if np.random.rand() < spawn_chance:
             f = Enemy(
@@ -257,12 +248,13 @@ if __name__ == '__main__':
                 v=(0,-max(abs(-np.random.rand()/10),0.05)),
                 a=(0.0,0.0),
                 angle=math.pi,
+                hp=2,
             )
             ang = math.atan2(p.x[1] - f.x[1], p.x[0] - f.x[0])
             f.angle = ang
             enn.append(f)
         
-        if frame % 120 == 0:
+        if frame % 25 == 0:
             for en in enn:
                 ang = math.atan2(p.x[1] - en.x[1], p.x[0] - en.x[0])
                 en.angle = ang + np.random.rand()*2*math.pi/8
@@ -315,3 +307,20 @@ if __name__ == '__main__':
 
         frame += 1
         time.sleep(max(1/60 - g.dt, 0)) # 60FPS
+
+
+if __name__ == '__main__':
+    width, height = 1000, 1000
+    g = Game(dim=(width, height))
+
+    main(g)
+
+    text = g.font.render('You died', True, (255, 0, 0))
+    textRect = text.get_rect()
+    textRect.center = (width/2, height/2)
+
+    g.bg.fill((0, 0, 0))
+    g.bg.blit(text, (textRect.x, textRect.y))
+    g.draw()
+    while True:
+        time.sleep(10)
